@@ -213,6 +213,18 @@ class string_leap:
         plt.tight_layout()
         plt.show()
 
-string2 = string_leap(0.0003, 1)
-string2.run(2, 1)
-string2.animate_wave()
+    def data_plotter(self, num_plots=7):
+        plt.figure(figsize=(10, 6))
+        for i in range(0, len(self.wave_history), max(1, len(self.wave_history) // num_plots)):
+            plt.plot(self.x_points, self.wave_history[i], label=f'Time = {self.time_history[i]:.3f}s')
+        plt.xlabel('Position (x)')
+        plt.ylabel('Displacement (y)')
+        plt.title('Wave Movement on String at Different Time Steps')
+        plt.grid(True)
+        plt.legend()
+        plt.show()
+
+string2 = string_leap(0.0001, 1)
+string2.run(2, 3)
+#string2.animate_wave()
+string2.data_plotter()
