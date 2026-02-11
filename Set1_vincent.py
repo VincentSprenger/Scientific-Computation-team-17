@@ -139,20 +139,17 @@ class string_leap:
         self.a_pos[index] = (self.c ** 2) * (self.y_pos[index + 1] + self.y_pos[index - 1] - 2 * self.y_pos[index]) / (self.dx ** 2)
     
     def string_leapfrog_step(self):
-        for i in range(1, len(self.x_points) - 1):
-            self.string_accel_i(i)
-            #print(f"Acceleration at index {i}: {self.a_pos[i]}")
-        
-        for i in range(1, len(self.x_points) - 1):
-            if self.first_step == True:
-                self.v_pos[i] = self.v_pos[i] + 0.5 * self.a_pos[i] * self.dt
-                self.first_step = False
+        for i in range(1, len(self.x_points) - 1): # Update velocity at half time step
+            self.v_pos[i] = self.v_pos[i] + 0.5 * self.a_pos[i] * self.dt
 
-            else:
-                self.v_pos[i] = self.v_pos[i] + self.a_pos[i] * self.dt
+        for i in range(1, len(self.x_points) - 1): # Update acceleration at full time step
+            self.string_accel_i(i)
 
         for i in range(1, len(self.x_points) - 1):
             self.y_pos[i] = self.y_pos[i] + self.v_pos[i] * self.dt
+
+        for i in range(1, len(self.x_points) - 1): # Update velocity at next half time step
+            self.v_pos[i] = self.v_pos[i] + 0.5 * self.a_pos[i] * self.dt
 
         self.t += self.dt
     
@@ -216,6 +213,6 @@ class string_leap:
         plt.tight_layout()
         plt.show()
 
-string2 = string_leap(0.001, 1)
-string2.run(2, 3)
+string2 = string_leap(0.0003, 1)
+string2.run(2, 1)
 string2.animate_wave()
