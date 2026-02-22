@@ -121,10 +121,10 @@ def successive_over_relaxation(size, omega, objects, threshold=1e-6,max_iteratio
     return grid, num_iter, deltas
 
 def analyse_trend(size, omega):
-    for threshold in [1, 1e-1, 1e-2, 1e-3, 1e-4, 1e-5, 1e-6]:
+    for threshold in np.logspace(0, -5, 6):
         grid,iter, delta_list = successive_over_relaxation(size, omega, empty_object(),threshold=threshold)
         #plot middle line
-        plt.plot(grid[:, 25], label=f'SOR (omega={omega}, threshold={threshold}, iterations={iter})')
+        plt.plot(grid[:, 25], label=rf'SOR ($\omega$={omega}, $\epsilon$={round(threshold,4)}, iters={iter})')
     plt.legend()
     plt.title('Concentration distribution along the middle line for different thresholds')
     plt.xlabel('Position')
@@ -219,7 +219,7 @@ def golden_ratio_search(left_bound, right_bound, threshold=1e-3, size = 50):
             left_o = right_bound - inv_phi * (right_bound - left_bound)
             _, left_iter, _ = successive_over_relaxation(size, left_o, empty_object())
         steps += 1
-    return (left_o + right_o) / 2
+    return (left_o + right_o) / 2, right_iter if right_iter < left_iter else left_iter
 
     
 if __name__ == "__main__":
@@ -227,22 +227,33 @@ if __name__ == "__main__":
     objects = empty_object()
     j_grid,j_iter, j_deltas = jacobi(50, objects)
     plt.imshow(j_grid, cmap='hot', interpolation='nearest')
-    plt.colorbar()
+    plt.colorbar(label='Concentration')
     plt.title(f'Steady State diffusion (Jacobi, {j_iter} iterations)')
     plt.show()
 
     gs_grid,gs_iter, gs_deltas = gauss_seidel(50, objects)
     plt.imshow(gs_grid, cmap='hot', interpolation='nearest')
-    plt.colorbar()
+    plt.colorbar(label='Concentration')
     plt.title(f'Steady State diffusion (Gauss-Seidel, {gs_iter} iterations)')
     plt.show()
 
     omega = 1.75
     sor_grid,sor_iter, sor_deltas = successive_over_relaxation(50, omega, objects)
     plt.imshow(sor_grid, cmap='hot', interpolation='nearest')
-    plt.colorbar()
+    plt.colorbar(label='Concentration')
     plt.title(f'Steady State diffusion (SOR, omega={omega}, {sor_iter} iterations)')
     plt.show()
+
+    # plot middle line
+    plt.plot(j_grid[:, 25], label=f'Jacobi ({j_iter} iters)')
+    plt.plot(gs_grid[:, 25], label=f'Gauss-Seidel ({gs_iter} iters)')
+    plt.plot(sor_grid[:, 25], label=rf'SOR ($\omega$={omega}, {sor_iter} iters)')
+    plt.legend()
+    plt.title('Concentration distribution along the middle line')
+    plt.xlabel('Position')
+    plt.ylabel('Concentration')
+    plt.show()
+
 
     omega = 1.1
     sor_grid1,sor_iter1, sor_deltas1 = successive_over_relaxation(50, omega, objects)
@@ -259,18 +270,10 @@ if __name__ == "__main__":
     omega = 2
     sor_grid5,sor_iter5, sor_deltas5 = successive_over_relaxation(50, omega, objects)
 
-    # plot middle line
-    plt.plot(j_grid[:, 25], label=f'Jacobi ({j_iter} iters)')
-    plt.plot(gs_grid[:, 25], label=f'Gauss-Seidel ({gs_iter} iters)')
-    plt.plot(sor_grid[:, 25], label=rf'SOR ($\omega$={omega}, {sor_iter} iters)')
-    plt.legend()
-    plt.title('Concentration distribution along the middle line')
-    plt.xlabel('Position')
-    plt.ylabel('Concentration')
-    plt.show()
+    
 
     # analyse tendency towards convergence
-    analyse_trend(50, omega)
+    analyse_trend(50, 1.94)
 
     # Convergence
 
@@ -300,16 +303,27 @@ if __name__ == "__main__":
     
     # plot optimal omega over size
     omegas = []
-    sizes = np.linspace(10, 100, 11, dtype=int)
+    iterations = []
+    sizes = np.linspace(10, 100, 10, dtype=int)
     for size in sizes:
-        optimal_omega = golden_ratio_search(1.0, 1.999, threshold=1e-3, size=size)
+        optimal_omega, iters = golden_ratio_search(1.0, 1.999, threshold=1e-4, size=size)
         omegas.append(optimal_omega)
+        iterations.append(iters)
         print(f'Optimal omega for size {size}: {optimal_omega}')
-    plt.plot(sizes, omegas, label='Optimal omega over size')
-    plt.xlabel('Size')
-    plt.ylabel('Optimal omega')
-    plt.title('Optimal omega over size')
-    plt.legend()
+
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(8, 10), sharex=False)
+
+    ax1.plot(sizes, omegas)
+    ax1.set_title(r'Optimal $\omega$ vs grid size')
+    ax1.set_ylabel(r'$\omega$')
+    ax1.grid()
+
+    ax2.plot(sizes, iterations)
+    ax2.set_title(r'Iterations at optimal $\omega$ vs grid size')
+    ax2.set_ylabel('Iterations')
+    ax2.grid()
+
+    plt.tight_layout()
     plt.show()
 
     # Object playground
@@ -319,6 +333,6 @@ if __name__ == "__main__":
     total_obj = np.concatenate((obj, obj2, obj3), axis=0)
     sor_grid_obj, sor_iter_obj, sor_deltas_obj = successive_over_relaxation(50, 1.94, total_obj,edge_type=sink_edge)
     plt.imshow(sor_grid_obj, cmap='hot', interpolation='nearest')
-    plt.colorbar()
+    plt.colorbar(label='Concentration')
     plt.title(f'Steady State diffusion with object (SOR, omega=1.94, {sor_iter_obj} iterations)')
     plt.show()
