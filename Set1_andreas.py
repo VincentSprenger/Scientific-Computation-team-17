@@ -18,14 +18,14 @@ def update(grid, N, Dt):
     return grid2
 
 
-def get_dt(n, lim = 1.0):
+def get_dt(n, lim = 0.95):
     #gets a stable dt for the chosen N
     dx = 1.0 / n
     dx2 = dx * dx
     return lim * dx2 / (4.0)
 
 def c_analytic(y, t, n_terms=2000):
-
+    #returns analytical solution
     y = np.asarray(y, dtype=float)
 
     if t == 0:
@@ -41,7 +41,7 @@ def c_analytic(y, t, n_terms=2000):
     return res
 
 def get_snapshots(n, dt, t_end, target_times):
-
+    #daves frid state at specified times
     grid = np.zeros((n, n))
     grid[n - 1, :] = 1.0
 
@@ -60,24 +60,28 @@ def get_snapshots(n, dt, t_end, target_times):
     return snapshots
 
 def plot_comparison(snapshots, target_times, n):
+    #plots analytic vs numerical solution
     y = np.linspace(0, 1, n)
+
+    analytic_color = "C0"
+    numerical_color = "C1"
 
     plt.figure(figsize=(7, 5))
     for t in target_times:
         grid_snapshot = snapshots[t]
         c_num = grid_snapshot.mean(axis=1)
-        c_exact = c_analytic(y,t)
+        c_exact = c_analytic(y, t)
 
-        plt.plot(y, c_exact, linewidth=2)
-        plt.plot(y, c_num, linestyle="--", linewidth=1.5)
+        plt.plot(y, c_exact, color=analytic_color, linewidth=2)
+        plt.plot(y, c_num, linestyle="--",color=numerical_color, linewidth=1.5)
 
         # label time
-        idx = int(0.8 * len(y))
-        plt.text(y[idx], c_exact[idx], f"{t}", fontsize=10, va="center")
+        indx = int(0.8 * len(y))
+        plt.text(y[indx], c_exact[indx], f"{t}", fontsize=10, va="center")
 
     plt.xlabel("y")
     plt.ylabel("c(y,t)")
-    plt.title("anlytic vs simulation at different times")
+    plt.title("analytic vs simulation at different times")
     plt.xlim(0, 1)
     plt.ylim(0, 1)
     plt.tight_layout()
@@ -85,6 +89,7 @@ def plot_comparison(snapshots, target_times, n):
     plt.close()
 
 def plot_heatmaps(snapshots, target_times):
+    #plots 2d grid at given times
     for t in target_times:
         grid_snapshot = snapshots[t]
 
@@ -99,7 +104,8 @@ def plot_heatmaps(snapshots, target_times):
         plt.close()
 
 
-def animate(_frame_idx, state, t_end, skip, n, dt, im, title):
+def animate(_frame_indx, state, t_end, skip, n, dt, im, title):
+    #helper for producing animated heatmap
     if state["t"] >= t_end:
         return (im, title)
 
@@ -114,7 +120,9 @@ def animate(_frame_idx, state, t_end, skip, n, dt, im, title):
     return (im, title)
 
 
-def make_animation(n, t_end, dt, skip= 5, outfile="diffusion.gif"):
+def make_animation(n, t_end, dt, skip= 50, outfile="diffusion.gif"):
+    #produces animated heatmap
+    #skip used to skip skip time intervals, makes code run faster + ensures video isnt too slow 
     dx = 1.0 / n
     grid = np.zeros((n, n))
     grid[n-1, :]=1.0
@@ -147,4 +155,4 @@ print(dt)
 snapshots = get_snapshots(n, dt, t_end=1.0, target_times=target_times)
 plot_comparison(snapshots, target_times, n)
 plot_heatmaps(snapshots, target_times)
-make_animation(n, t_end=0.5, dt=dt)
+make_animation(n, t_end=1.0, dt=dt,skip=50)
