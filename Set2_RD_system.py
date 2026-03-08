@@ -130,8 +130,8 @@ def run_GS_simulation(F=0.035, k=0.065, Du=0.16, Dv=0.05, dt=1, filepath='sim_re
 # vvv Example usage vvv
 
 run_GS_simulation(
-    F=0.095, 
-    k=0.065, 
+    F=0.035, 
+    k=0.06, 
     Du=0.16, 
     Dv=0.05, 
     dt=1, 
