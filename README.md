@@ -6,6 +6,22 @@ The code is split into 3 parts respective on the people who worked on it, vincen
 
 # Assignment 2
 
+## Diffusion Limited Aggregation
+
+Requirements: Python 3,numpy, matplotlib, numba, tqdm, timeit
+
+Contains a class called DLA which creates the DLA model, the functions used to run the model are:
+
+DLA.run(steps, s_steps, r_steps) runs the model in its original state. Steps defines how many growth steps the model makes before stopping, s_steps defines how many times the SOR equation is run to initialize the model, r_steps is how many times the SOR equation is run between steps these do not need to be changed.
+
+DLA.plot_cluster() plots the created clusters.
+
+DLA.run_parallel() works the same as .run() however due to compilation is significantly faster and suggested to use
+
+DLA.run_test(steps) runs the model both as .run() and .run_parallel() with the same params to compare computational time.
+
+just uncomment the functions at the bottom of the code to play with it.
+
 ## Monte Carlo DLA
 
 Requirements: Python 3,numpy, matplotlib
