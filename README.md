@@ -40,9 +40,30 @@ Contained in Set2_RD_system.py.
 Contains functions for running simulations of the Gray Scott system. 
 
 Quick guide:
+```
 run_GS_simulation()
 animate()
+```
 
 run_GS_simulation() takes the parameters for the equations, the file path for the returned results, and an initial condition. ("Assignment" or "set+noise").
+
 animate() takes the file path for a results file, and an optional file path to save the video as an mp4.
+
 Example usage is shown at the bottom of the file. Simply run Set2_RD_system.py. 
+
+<details>
+  <summary>Videos</summary>
+  f=0.035, k=0.06, du=0.16, dv=0.08, dt=1
+
+  ![Video](./Assignment2/sim_results/DR_default.gif)
+
+  f=0.055, k=0.062, du=0.16, dv=0.08, dt=1
+  ![Video](./Assignment2/sim_results/DR_maze_angled.gif)
+
+  f=0.035, k=0.065, du=0.16, dv=0.08, dt=1
+  ![Video](./Assignment2/sim_results/DR_mitosis_like.gif)
+
+
+</details>
+
+
