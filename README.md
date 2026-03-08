@@ -26,6 +26,8 @@ just uncomment the functions at the bottom of the code to play with it.
 
 Requirements: Python 3,numpy, matplotlib
 
+can be ran from set2.2_andreas.py
+
 contains a class for running a random walk simulation of DLA. the size of the grid, the sticking probability ps and the seed used for the class can be set when initializing the class. 
 The simulation can be ran using class.run(), passing the desired number of walkers as an argument. The results can be plotted with class.plot().  
 simulations using a ps value <0.1 tend to take a long time so it is recommended you dont go below that threshold.
