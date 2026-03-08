@@ -74,9 +74,9 @@ def plot(U, V):
     plt.tight_layout()
     plt.show()
 
-def animate():
+def animate(source='sim_results/DR_sim_data.npy',save_path=None):
     # only animate every 100 steps to save memory and speed up animation
-    history = np.load('simulation_data.npy')
+    history = np.load(source)
     fig, axes = plt.subplots(1,2, figsize=(12, 5))
     # 0 for U, 1 for V
     grid_num = 1
@@ -95,18 +95,28 @@ def animate():
     frame_indices = np.linspace(0, history.shape[0] - 1, 700, dtype=int)
 
     ani = animation.FuncAnimation(fig,animate_frame,frames=frame_indices,interval=50,blit=True)
+    if save_path:
+        ani.save(save_path, writer='ffmpeg', fps=20)
     plt.show()
 
-# print("Initializing grids...")
-# U, V = initialize_grids(size=100, type='set+noise')
-# print("Starting simulation...")
-# params = (0.035, 0.065, 0.16, 0.05, 1)
-# history = simulate(U, V, steps=20000, params=params)
-# np.save('simulation_data.npy', np.array(history))
-# print("Simulation complete. Plotting results...")
-# print("Done")
+def run_simulation(F=0.035, k=0.065, Du=0.16, Dv=0.05, dt=1, filepath='sim_results/DR_sim_data.npy'):
+    print("Initializing grids...")
+    U, V = initialize_grids(size=100, type='set+noise')
+    print("Starting simulation...")
+    params = (F, k, Du, Dv, dt)
+    history = simulate(U, V, steps=5000, params=params)
+    np.save(filepath, np.array(history))
+    print("Simulation complete.")
 
-animate()
+run_simulation(
+    F=0.035, 
+    k=0.065, 
+    Du=0.16, 
+    Dv=0.05, 
+    dt=1, 
+    filepath='sim_results/DR_sim_data.npy'
+)
+animate(source='sim_results/DR_sim_data.npy', save_path='sim_results/DR_simulation.mp4')
 
 # special cases
 # default
