@@ -2,6 +2,26 @@ import numpy as np
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 from timeit import default_timer as timer
+import numba
+
+@numba.jit(nopython=True)
+def sor_kernel(concentration_grid, grid, SOR_omega, grid_size):
+    new_grid = concentration_grid.copy()
+    for x in range(1, grid_size):
+        for y in range(grid_size):
+            if grid[x, y]:
+                new_grid[x, y] = 0
+            else:
+                neighbors_sum = new_grid[x - 1, y]
+                if x + 1 < grid_size:
+                    neighbors_sum += concentration_grid[x + 1, y]
+                if y - 1 >= 0:
+                    neighbors_sum += new_grid[x, y - 1]
+                if y + 1 < grid_size:
+                    neighbors_sum += concentration_grid[x, y + 1]
+                new_val = neighbors_sum / 4.0
+                new_grid[x, y] = max(0.0, (1.0 - SOR_omega) * concentration_grid[x, y] + SOR_omega * new_val)
+    return new_grid
 
 class DLA:
     def __init__(self, grid_size=5, eta =1, SOR_omega = 1, num_particles = 1):
@@ -15,30 +35,6 @@ class DLA:
         self.eta = eta  
         self.SOR_omega = SOR_omega
         #self.changes_dict = {}
-
-
-    def test(self):
-        print(self.grid)
-        self.SOR_step() 
-        self.SOR_step() 
-        self.SOR_step() 
-        self.SOR_step() 
-        self.SOR_step() 
-        self.SOR_step() 
-        self.SOR_step() 
-        self.SOR_step() 
-        self.SOR_step() 
-        self.candidates_step()
-        print(self.candidates_grid)
-        self.probability_step()
-        print(self.grid)
-        self.SOR_step()
-        self.SOR_step()
-        self.SOR_step()
-        #rint(self.concentration_grid)
-        
-
-
 
 
     def probability(self, x, y):
@@ -118,38 +114,9 @@ class DLA:
         #print(self.candidates_grid)
 
     def SOR_step_parallel(self):
-        """Vectorized/parallelized SOR step using NumPy operations"""
+        """Parallelized SOR step using JIT-compiled kernel"""
         self.concentration_grid[0, :] = 1
-        
-        # Create output grid
-        new_grid = self.concentration_grid.copy()
-        
-        # Process each row with vectorized operations
-        for x in range(1, self.grid_size):
-            # Compute sum of all neighbors for this row (vectorized)
-            neighbor_sum = np.zeros(self.grid_size, dtype=float)
-            
-            # X neighbors
-            neighbor_sum += self.concentration_grid[x - 1, :]  # x-1 (always valid)
-            if x + 1 < self.grid_size:
-                neighbor_sum[0:self.grid_size] += self.concentration_grid[x + 1, :]  # x+1
-            
-            # Y neighbors (with proper boundary handling - no double counting)
-            temp_y = self.concentration_grid[x, :].copy()
-            neighbor_sum += np.pad(temp_y[:-1], (1, 0), mode='constant')    # y-1 shift
-            neighbor_sum += np.pad(temp_y[1:], (0, 1), mode='constant')     # y+1 shift
-            
-            new_val = neighbor_sum / 4
-            
-            # Only update non-occupied cells
-            non_occupied_mask = ~self.grid[x, :]
-            new_grid[x, non_occupied_mask] = np.maximum(
-                0,
-                (1 - self.SOR_omega) * self.concentration_grid[x, non_occupied_mask] + 
-                self.SOR_omega * new_val[non_occupied_mask]
-            )
-        
-        self.concentration_grid = new_grid
+        self.concentration_grid = sor_kernel(self.concentration_grid, self.grid, self.SOR_omega, self.grid_size)
 
     def probability_step(self):
         #print(np.nonzero(self.candidates_grid))
@@ -234,10 +201,13 @@ class DLA:
         self.plot_cluster()
 
 
-DLA_test = DLA(grid_size=100, eta=1, SOR_omega=1.5)
-#DLA_test.run(600)
-#DLA_test.plot_cluster()
-
-DLA_test.run_test(500)
+DLA_test = DLA(grid_size=100, eta=0.2, SOR_omega=1.5)
 #DLA_test.run_parallel(800)
 #DLA_test.plot_cluster()
+
+DLA_test.run_test(800)
+
+
+#DLA_test_parallel = DLA(grid_size=200, eta=1, SOR_omega=1.5)
+#DLA_test_parallel.run_parallel(1600)
+#DLA_test_parallel.plot_cluster()
