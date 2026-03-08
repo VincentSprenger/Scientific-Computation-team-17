@@ -16,7 +16,7 @@ DLA.run(steps, s_steps, r_steps) runs the model in its original state. Steps def
 
 DLA.plot_cluster() plots the created clusters.
 
-DLA.run_parallel() works the same as .run() however due to compilation is significantly faster and suggested to use
+DLA.run_parallel(steps, s_steps, r_steps) works the same as .run() however due to compilation is significantly faster and suggested to use
 
 DLA.run_test(steps) runs the model both as .run() and .run_parallel() with the same params to compare computational time.
 
