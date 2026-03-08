@@ -129,34 +129,37 @@ def run_GS_simulation(F=0.035, k=0.065, Du=0.16, Dv=0.05, dt=1, filepath='sim_re
 
 # vvv Example usage vvv
 
-# run_GS_simulation(
-#     F=0.035, 
-#     k=0.065, 
-#     Du=0.16, 
-#     Dv=0.05, 
-#     dt=1, 
-#     filepath='sim_results/DR_sim_data.npy', 
-#     initial_condition='set+noise' # options: 'assignment' or 'set+noise'
-# )
-# animate(source='sim_results/DR_sim_data.npy', save_path='sim_results/DR_simulation.mp4')
-
-# --------------------------------
-
 run_GS_simulation(
     F=0.035, 
-    k=0.06, 
+    k=0.065, 
     Du=0.16, 
     Dv=0.05, 
     dt=1, 
     filepath='sim_results/DR_sim_data.npy', 
     initial_condition='set+noise' # options: 'assignment' or 'set+noise'
 )
+animate(source='sim_results/DR_sim_data.npy', save_path='sim_results/DR_simulation.mp4')
 
-history = np.load('sim_results/DR_sim_data.npy')
-V = history[-1, :, :, 1]
-plt.imshow(V, cmap='viridis', vmin=0, vmax=1)
-plt.title('Final V concentration\n(F=0.035, k=0.06, Du=0.16, Dv=0.05, dt=1)')
-plt.show()
+# --------------------------------
+
+
+# making figures
+
+# run_GS_simulation(
+#     F=0.035, 
+#     k=0.06, 
+#     Du=0.16, 
+#     Dv=0.05, 
+#     dt=1, 
+#     filepath='sim_results/DR_sim_data.npy', 
+#     initial_condition='set+noise' # options: 'assignment' or 'set+noise'
+# )
+
+# history = np.load('sim_results/DR_sim_data.npy')
+# V = history[-1, :, :, 1]
+# plt.imshow(V, cmap='viridis', vmin=0, vmax=1)
+# plt.title('Final V concentration\n(F=0.035, k=0.06, Du=0.16, Dv=0.05, dt=1)')
+# plt.show()
 
 # special cases
 # default
