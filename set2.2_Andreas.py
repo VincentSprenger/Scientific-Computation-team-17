@@ -1,7 +1,3 @@
-import sys
-print("RUNNING:", sys.executable)
-
-
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -34,7 +30,7 @@ class DLA_MC:
         elif direction == 3:
             y = (y + 1) % self.size
 
-        # top/bottom boundary check
+        #top/bottom boundary check
         if x < 0 or x >= self.size:
             return None
 
@@ -43,7 +39,7 @@ class DLA_MC:
     def run(self, walkers):
         stuck = 0
         while stuck < walkers:
-            # release walker at top
+            #release walker at top
             x, y = 0, np.random.randint(0, self.size)
             
             while True:
@@ -52,7 +48,7 @@ class DLA_MC:
                     break
                 x, y = result
 
-                # check if next to cluster
+                #check if next to cluster
                 neighbors = []
                 if x > 0: neighbors.append((x-1, y))
                 if x < self.size - 1: neighbors.append((x+1, y))
@@ -71,10 +67,23 @@ class DLA_MC:
         plt.title(f"Monte Carlo DLA  |  ps = {self.ps}")
         plt.axis("off")
         plt.tight_layout()
+        plt.savefig(f"DLA_ps_{self.ps}.png", dpi=150)
         plt.show()
 
 #PS = 1 acts the same as no ps, so it should work for part C
-simulation = DLA_MC(size=100, ps=1.0)
-simulation.run(walkers=600)
+simulation = DLA_MC(size=100, ps=1.0,seed=42)
+simulation.run(walkers=800)
 simulation.plot()
-#TODO: add test for the other ps values
+
+simulation = DLA_MC(size=100, ps=0.5,seed=42)
+simulation.run(walkers=800)
+simulation.plot()
+
+simulation = DLA_MC(size=100, ps=0.25,seed=42)
+simulation.run(walkers=800)
+simulation.plot()
+
+#this one takes a while
+simulation = DLA_MC(size=100, ps=0.1,seed=42)
+simulation.run(walkers=800)
+simulation.plot()
