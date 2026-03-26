@@ -1,0 +1,170 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from tqdm import tqdm
+from timeit import default_timer as timer
+import numba
+
+
+
+Lx = 2.2
+Ly = 0.41
+
+
+
+class Navier_stokes_Simulations_finite_difference:
+    def __init__(self, Lx, Ly, nx, ny, dt, nu, F):
+        self.Lx = Lx
+        self.Ly = Ly
+        self.nx = nx
+        self.ny = ny
+        self.dt = dt
+        self.nu = nu  # Kinematic viscosity
+        self.F = F
+        self.Force_x = np.ones((nx, ny)) * self.F  # External force in x-direction
+        self.Force_y = np.zeros((nx, ny))  # External force in y-direction
+        self.rho = 1.0
+
+        
+        # Create spatial grid
+        self.dx = Lx / (nx - 1)
+        self.dy = Ly / (ny - 1)
+        
+        # Initialize velocity fields and pressure field
+        self.u = np.zeros((nx, ny))  # x-velocity
+        self.v = np.zeros((nx, ny))  # y-velocity
+        self.p = np.zeros((nx, ny))  # pressure
+        self.un = np.zeros((nx, ny))  # x-velocity
+        self.vn = np.zeros((nx, ny))  # y-velocity
+        self.pn = np.zeros((nx, ny))  # pressure
+
+        self.obstacle_list = self.obstacle_list()
+        
+    def obstacle_grid(self):
+        """Create a grid with the obstacle (cylinder)"""
+        x = np.linspace(0, self.Lx, self.nx)
+        y = np.linspace(0, self.Ly, self.ny)
+        X, Y = np.meshgrid(x, y, indexing='ij')
+        
+        # Define cylinder parameters
+        cx, cy = 0.2, 0.2  # Center of the cylinder
+        r = 0.05           # Radius of the cylinder
+        
+        # Create obstacle grid
+        obstacle = (X - cx)**2 + (Y - cy)**2 < r**2
+        return obstacle.astype(bool)
+    
+    def obstacle_list(self):
+        """Create a list of obstacle points (cylinder)"""
+        x = np.linspace(0, self.Lx, self.nx)
+        y = np.linspace(0, self.Ly, self.ny)
+        X, Y = np.meshgrid(x, y, indexing='ij')
+        
+        # Define cylinder parameters
+        cx, cy = 0.2, 0.2  # Center of the cylinder
+        r = 0.05           # Radius of the cylinder
+        
+        # Create list of obstacle points
+        obstacle_points = []
+        for i in range(self.nx):
+            for j in range(self.ny):
+                if (X[i, j] - cx)**2 + (Y[i, j] - cy)**2 < r**2:
+                    obstacle_points.append((i, j))
+        return obstacle_points
+    
+    def navier_stokes_update_u(self, u, v, p, obstacle_list):
+        self.un = u.copy()
+        for i in range(1, self.nx - 1):
+            for j in range(1, self.ny - 1):
+                if (i, j) in obstacle_list:
+                    u[i, j] = 0  # No-slip condition at the obstacle
+                else:
+                    u[i, j] = (self.un[i, j] -
+                               self.un[i, j] * self.dt / self.dx * (self.un[i, j] - self.un[i - 1, j]) -
+                               self.v[i, j] * self.dt / self.dy * (self.un[i, j] - self.un[i, j - 1]) -
+                               self.dt / (2 * self.dx * self.rho) * (self.p[i + 1, j] - self.p[i - 1, j]) +
+                               self.nu * self.dt / self.dx**2 * (self.un[i + 1, j] - 2 * self.un[i, j] + self.un[i - 1, j]) +
+                               self.nu * self.dt / self.dy**2 * (self.un[i, j + 1] - 2 * self.un[i, j] + self.un[i, j - 1])) + self.dt * self.Force_x[i, j]
+                    
+    def navier_stokes_update_v(self, u, v, p, obstacle_list):
+        vn = v.copy()
+        for i in range(1, self.nx - 1):
+            for j in range(1, self.ny - 1):
+                if (i, j) in obstacle_list:
+                    v[i, j] = 0  # No-slip condition at the obstacle
+                else:
+                    v[i, j] = (vn[i, j] -
+                               self.un[i, j] * self.dt / self.dx * (vn[i, j] - vn[i - 1, j]) -
+                               self.v[i, j] * self.dt / self.dy * (vn[i, j] - vn[i, j - 1]) -
+                               self.dt / (2 * self.dy * self.rho) * (self.p[i, j + 1] - self.p[i, j - 1]) +
+                               self.nu * self.dt / self.dx**2 * (vn[i + 1, j] - 2 * vn[i, j] + vn[i - 1, j]) +
+                               self.nu * self.dt / self.dy**2 * (vn[i, j + 1] - 2 * vn[i, j] + vn[i, j - 1])) + self.dt * self.Force_y[i, j]
+
+
+
+
+
+    def navier_stokes_update_p(self, u, v, p, obstacle_list):
+        pn = p.copy()
+        for i in range(1, self.nx - 1):
+            for j in range(1, self.ny - 1):
+                if (i, j) in obstacle_list:
+                    p[i, j] = 0  # Pressure inside the obstacle can be set to zero
+                else:
+                    first = (1 / self.dt) * ((u[i + 1, j] - u[i - 1, j]) / (2 * self.dx) + (v[i, j + 1] - v[i, j - 1]) / (2 * self.dy))
+                    second = ((u[i + 1, j] - u[i - 1, j]) / (2 * self.dx))**2
+                    third = 2 * ((u[i, j + 1] - u[i, j - 1]) / (2 * self.dy) * (v[i + 1, j] - v[i - 1, j]) / (2 * self.dx))
+                    fourth = ((v[i, j + 1] - v[i, j - 1]) / (2 * self.dy))**2
+                    extra_p = first - second - third - fourth
+
+                    p[i, j] = (((pn[i + 1, j] + pn[i - 1, j]) * self.dy**2) + ((pn[i, j + 1] + pn[i, j - 1]) * self.dx**2)) / (2 * (self.dx**2 + self.dy**2)) - extra_p * self.rho * self.dx**2 * self.dy**2 / (2 * (self.dx**2 + self.dy**2))
+
+
+
+    def boundry_conditions(self, u, v, p):
+        # inlet and outlet are periodic in x-direction
+        #final nodes in x also have dp/dx = 0 and du/dx = 0, dv/dx = 0
+        u[-1, :] = u[-2, :]
+        v[-1, :] = v[-2, :]
+        p[-1, :] = p[-2, :]
+
+
+
+        u[0, :] = u[-1, :]
+        v[0, :] = v[-1, :]
+        p[0, :] = p[-1, :]
+        
+        # Top and bottom walls: no-slip condition
+        u[:, 0] = 0
+        u[:, -1] = 0
+        v[:, 0] = 0
+        v[:, -1] = 0
+
+        #dp/dy = 0 at top and bottom walls
+        p[:, 0] = p[:, 1]
+        p[:, -1] = p[:, -2]
+
+
+    def run_simulation(self, num_steps):
+        for step in range(num_steps):
+            self.navier_stokes_update_u(self.u, self.v, self.p, self.obstacle_list)
+            self.navier_stokes_update_v(self.u, self.v, self.p, self.obstacle_list)
+            self.navier_stokes_update_p(self.u, self.v, self.p, self.obstacle_list)
+            self.boundry_conditions(self.u, self.v, self.p)
+
+    def plot_velocity_field(self):
+        #with speed in color not arrows
+        speed = np.sqrt(self.u**2 + self.v**2)
+        plt.figure(figsize=(10, 5))
+        plt.imshow(speed.T, origin='lower', extent=[0, self.Lx, 0, self.Ly], cmap='viridis')
+        plt.colorbar(label='Speed')
+        plt.title('Velocity Field Speed')
+        plt.xlabel('x')
+        plt.ylabel('y')
+        plt.show()
+
+
+
+# Example usage
+sim = Navier_stokes_Simulations_finite_difference(Lx, Ly, nx=100, ny=50, dt=0.001, nu=0.01, F=50.0)
+sim.run_simulation(num_steps=200)
+sim.plot_velocity_field()
