@@ -1,14 +1,17 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import os
 from tqdm import tqdm
 from timeit import default_timer as timer
 import numba
-
+import ngsolve
+from ngsolve import *
+from netgen.geom2d import SplineGeometry
 
 
 Lx = 2.2
 Ly = 0.41
-
+t_max = 100
 
 
 class Navier_stokes_Simulations_finite_difference:
@@ -23,6 +26,7 @@ class Navier_stokes_Simulations_finite_difference:
         self.Force_x = np.ones((nx, ny)) * self.F  # External force in x-direction
         self.Force_y = np.zeros((nx, ny))  # External force in y-direction
         self.rho = 1.0
+        self.num_steps = int(t_max / dt)
 
         
         # Create spatial grid
@@ -144,8 +148,8 @@ class Navier_stokes_Simulations_finite_difference:
         p[:, -1] = p[:, -2]
 
 
-    def run_simulation(self, num_steps):
-        for step in range(num_steps):
+    def run_simulation(self):
+        for step in tqdm(range(self.num_steps)):
             self.navier_stokes_update_u(self.u, self.v, self.p, self.obstacle_list)
             self.navier_stokes_update_v(self.u, self.v, self.p, self.obstacle_list)
             self.navier_stokes_update_p(self.u, self.v, self.p, self.obstacle_list)
@@ -165,6 +169,298 @@ class Navier_stokes_Simulations_finite_difference:
 
 
 # Example usage
-sim = Navier_stokes_Simulations_finite_difference(Lx, Ly, nx=100, ny=50, dt=0.001, nu=0.01, F=50.0)
-sim.run_simulation(num_steps=200)
-sim.plot_velocity_field()
+#sim = Navier_stokes_Simulations_finite_difference(Lx, Ly, nx=int(Lx * 100), ny=int(Ly * 100), dt=0.001, nu=0.01, F=10)
+#sim.run_simulation()
+#sim.plot_velocity_field()
+
+
+
+class Navier_stokes_Simulation_Fem_NGSOLVE:
+    #here we simulate the navier stokes equations using the finite element method and ngsolve library
+    def __init__(self, Lx, Ly, nu, tau):
+        self.Lx = Lx
+        self.Ly = Ly
+        self.nu = nu
+        self.tau = tau
+        self.t_max = 10
+        self.mesh = self.create_mesh()
+
+    def create_mesh(self):
+        geo = SplineGeometry()
+        geo.AddRectangle((0, 0), (self.Lx, self.Ly), bcs=("wall", "outlet", "wall", "inlet"))
+        geo.AddCircle((0.2, 0.2), r=0.05, leftdomain=0, rightdomain=1, bc="cyl", maxh=0.02)
+        mesh = Mesh(geo.GenerateMesh(maxh=0.02))
+        mesh.Curve(3)
+        return mesh
+    
+    def visualize_mesh(self):
+        for e in self.mesh.edges:
+            line = np.array([self.mesh.vertices[v.nr].point for v in e.vertices])
+            plt.plot(line[:,0],line[:,1],c='gray',alpha=0.75)
+        for v in self.mesh.vertices:
+            plt.text(*v.point,v,color='red')
+        plt.gca().set_axis_off()
+        plt.gca().set_aspect(1)
+        plt.show()
+
+    #after having made and validated the mesh, we can now set up the finite element spaces and the variational formulation of the navier stokes equations
+    def setup_fem(self):
+        self.V = VectorH1(self.mesh, order=3, dirichlet="wall|cyl|inlet")
+        self.Q = H1(self.mesh, order=2, dirichlet="outlet")
+        self.X = self.V * self.Q
+
+        self.u, self.p = self.X.TrialFunction()
+        self.v, self.q = self.X.TestFunction()
+
+        self.stokes = self.nu * InnerProduct(grad(self.u), grad(self.v)) + div(self.u) * self.q + div(self.v) * self.p - 1e-10 * self.p * self.q
+
+        self.a = BilinearForm(self.X, symmetric=True)
+        self.a += self.stokes * dx
+        self.a.Assemble()
+
+        self.f = LinearForm(self.X)
+        self.f.Assemble()
+
+        self.gfu = GridFunction(self.X)
+
+        # Parabolic inflow profile at inlet.
+        self.uin = CoefficientFunction((1.5 * 4 * y * (self.Ly - y) / (self.Ly * self.Ly), 0))
+        self.gfu.components[0].Set(self.uin, definedon=self.mesh.Boundaries("inlet"))
+
+        # Solve a Stokes problem for a physically meaningful initial condition.
+        inv_stokes = self.a.mat.Inverse(self.X.FreeDofs(), inverse="sparsecholesky")
+        self.res = self.f.vec.CreateVector()
+        self.res.data = self.f.vec - self.a.mat * self.gfu.vec
+        self.gfu.vec.data += inv_stokes * self.res
+
+        self.oseen = BilinearForm(self.X, check_unused=False)
+        self.oseen += (
+            self.nu * InnerProduct(grad(self.u), grad(self.v))
+            + InnerProduct(grad(self.u) * self.gfu.components[0], self.v)
+            + div(self.u) * self.q
+            + div(self.v) * self.p
+            - 1e-10 * self.p * self.q
+        ) * dx
+
+        self.gfu_next = GridFunction(self.X)
+        self.delta = self.f.vec.CreateVector()
+
+    def run_simulation(self, tend=10, relaxation=0.7, tol=1e-8):
+        n_iter = min(300, max(20, int(tend / self.tau)))
+        with TaskManager():
+            for it in range(n_iter):
+                self.oseen.Assemble()
+                inv = self.oseen.mat.Inverse(self.X.FreeDofs(), inverse="sparsecholesky")
+                self.gfu_next.vec.data = inv * self.f.vec
+                self.gfu_next.components[0].Set(self.uin, definedon=self.mesh.Boundaries("inlet"))
+                self.gfu_next.components[1].Set(CoefficientFunction(0), definedon=self.mesh.Boundaries("outlet"))
+
+                self.delta.data = self.gfu_next.vec - self.gfu.vec
+                self.gfu.vec.data = (1 - relaxation) * self.gfu.vec + relaxation * self.gfu_next.vec
+
+                delta_norm = np.linalg.norm(self.delta.FV().NumPy())
+                if (it + 1) % 20 == 0 or delta_norm < tol:
+                    print(f"Picard iter {it + 1}/{n_iter}, update norm = {delta_norm:.3e}")
+                if delta_norm < tol:
+                    break
+
+                Redraw()
+
+    def plot_velocity_field(self, nx=320, ny=80, output_path="sim_results/fem_velocity_set3.png", show_plot=True):
+        x_vals = np.linspace(0.0, self.Lx, nx)
+        y_vals = np.linspace(0.0, self.Ly, ny)
+        speed = np.full((ny, nx), np.nan)
+        vel_cf = self.gfu.components[0]
+
+        for j, yv in enumerate(y_vals):
+            for i, xv in enumerate(x_vals):
+                mp = self.mesh(xv, yv)
+                if mp.nr == -1:
+                    continue
+                ux, uy = vel_cf(mp)
+                speed[j, i] = np.sqrt(ux * ux + uy * uy)
+
+        output_dir = os.path.dirname(output_path)
+        if output_dir:
+            os.makedirs(output_dir, exist_ok=True)
+
+        valid_speed = speed[~np.isnan(speed)]
+        vmax = np.percentile(valid_speed, 99) if valid_speed.size else 1.0
+
+        plt.figure(figsize=(12, 3))
+        plt.imshow(speed, origin="lower", extent=[0, self.Lx, 0, self.Ly], cmap="viridis", aspect="auto", vmin=0.0, vmax=vmax)
+        plt.colorbar(label="|u|")
+        plt.title("FEM Velocity Magnitude (99th percentile clip)")
+        plt.xlabel("x")
+        plt.ylabel("y")
+        plt.tight_layout()
+        plt.savefig(output_path, dpi=180)
+
+        if show_plot:
+            plt.show()
+        else:
+            plt.close()
+
+        print(f"Saved velocity plot to {output_path}")
+
+    
+
+
+
+
+
+#tests
+#sim_fem = Navier_stokes_Simulation_Fem_NGSOLVE(Lx, Ly, 0.005, 0.02)
+#sim_fem.visualize_mesh()
+#sim_fem.setup_fem()
+#sim_fem.run_simulation()
+#sim_fem.plot_velocity_field()
+
+
+
+
+class Navier_stokes_Lattice_Boltzmann_Simulation:
+    #here we simulate the navier stokes equations using the lattice boltzmann method
+    def __init__(self, Lx, Ly, nu, tau, v_speed, granularity=100):
+        self.Lx = Lx
+        self.Ly = Ly
+        self.nu = nu
+        self.tau = tau
+        self.v_speed = float(v_speed)
+
+        # Keep LBM in a numerically stable regime.
+        if self.v_speed >= 0.3:
+            print(f"Warning: v_speed={self.v_speed} is too high for LBM. Using 0.12.")
+            self.v_speed = 0.12
+        if self.tau <= 0.5:
+            self.tau = 3.0 * self.nu + 0.5
+            print(f"Warning: tau must be > 0.5 in BGK-LBM. Using tau={self.tau:.4f}.")
+
+        #for the D2Q9 lattice, we have 9 discrete velocity directions
+        self.c = np.array([[0, 0], [1, 0], [0, 1], [-1, 0], [0, -1], [1, 1], [-1, 1], [-1, -1], [1, -1]])
+        self.w = np.array([4/9, 1/9, 1/9, 1/9, 1/9, 1/36, 1/36, 1/36, 1/36])
+        self.opp = np.array([0, 3, 4, 1, 2, 7, 8, 5, 6])
+
+        self.nx = int(Lx * granularity)
+        self.ny = int(Ly * granularity)
+
+        self.obstacle_grid_bool = self.obstacle_grid()
+
+    def obstacle_grid(self):
+        x = np.linspace(0, self.Lx, self.nx)
+        y = np.linspace(0, self.Ly, self.ny)
+        X, Y = np.meshgrid(x, y, indexing='ij')
+        
+        # Define cylinder parameters
+        cx, cy = 0.2, 0.2  # Center of the cylinder
+        r = 0.05           # Radius of the cylinder
+        
+        # Create obstacle grid
+        obstacle = (X - cx)**2 + (Y - cy)**2 < r**2
+        return obstacle.astype(bool)
+    
+    def equilibrium_eq(self, rho, ux, uy):
+        feq = np.zeros((self.nx, self.ny, 9))
+        for i in range(9):
+            cu = 3 * (self.c[i, 0] * ux + self.c[i, 1] * uy)
+            feq[:, :, i] = self.w[i] * rho * (1 + cu + 0.5 * cu**2 - 1.5 * (ux**2 + uy**2))
+        return feq
+    
+    def run_simulation(self, t_max=10):
+        rho = np.ones((self.nx, self.ny))
+        u_x = np.full((self.nx, self.ny), self.v_speed)
+        u_y = np.zeros((self.nx, self.ny))
+
+        u_x[self.obstacle_grid_bool] = 0
+        u_y[self.obstacle_grid_bool] = 0
+        f = self.equilibrium_eq(rho, u_x, u_y)
+
+        n_steps = int(t_max / self.tau)
+        for step in tqdm(range(n_steps)):
+            # Macroscopic variables
+            rho = np.sum(f, axis=2)
+            rho_safe = np.where(rho > 1e-12, rho, 1.0)
+            u_x = np.sum(f * self.c[:, 0], axis=2) / rho_safe
+            u_y = np.sum(f * self.c[:, 1], axis=2) / rho_safe
+            u_x[rho <= 1e-12] = 0.0
+            u_y[rho <= 1e-12] = 0.0
+            u_x[self.obstacle_grid_bool] = 0
+            u_y[self.obstacle_grid_bool] = 0
+
+            # Collision step
+            feq = self.equilibrium_eq(rho, u_x, u_y)
+            f_out = f - (f - feq) / self.tau
+
+            # Bounce-back at obstacle
+            for i in range(9):
+                f_out[self.obstacle_grid_bool, i] = f[self.obstacle_grid_bool, self.opp[i]]
+
+            # Streaming step
+            for i in range(9):
+                f[:, :, i] = np.roll(f_out[:, :, i], shift=self.c[i, 0], axis=0)
+                f[:, :, i] = np.roll(f[:, :, i], shift=self.c[i, 1], axis=1)
+
+            # Outlet: simple zero-gradient
+            f[-1, :, :] = f[-2, :, :]
+
+            # Inlet: Zou-He with prescribed streamwise speed
+            rho_in = (
+                (f[0, :, 0] + f[0, :, 2] + f[0, :, 4])
+                + 2.0 * (f[0, :, 3] + f[0, :, 6] + f[0, :, 7])
+            ) / (1.0 - self.v_speed)
+            f[0, :, 1] = f[0, :, 3] + (2.0 / 3.0) * rho_in * self.v_speed
+            f[0, :, 5] = f[0, :, 7] - 0.5 * (f[0, :, 2] - f[0, :, 4]) + (1.0 / 6.0) * rho_in * self.v_speed
+            f[0, :, 8] = f[0, :, 6] + 0.5 * (f[0, :, 2] - f[0, :, 4]) + (1.0 / 6.0) * rho_in * self.v_speed
+
+        self.rho = rho
+        self.u_x = u_x
+        self.u_y = u_y
+        self.f = f
+
+    def plot_velocity_field(self, output_path="sim_results/lbm_velocity_set3.png", show_plot=True):
+        x = np.linspace(0, self.Lx, self.nx)
+        y = np.linspace(0, self.Ly, self.ny)
+        X, Y = np.meshgrid(x, y, indexing='ij')
+
+        if not hasattr(self, "u_x") or not hasattr(self, "u_y"):
+            raise RuntimeError("Run run_simulation() before plotting LBM velocity field.")
+
+        speed = np.sqrt(self.u_x**2 + self.u_y**2)
+        speed_plot = speed.copy()
+        speed_plot[~np.isfinite(speed_plot)] = np.nan
+
+        output_dir = os.path.dirname(output_path)
+        if output_dir:
+            os.makedirs(output_dir, exist_ok=True)
+
+        valid_speed = speed_plot[(~self.obstacle_grid_bool) & np.isfinite(speed_plot)]
+        vmax = np.percentile(valid_speed, 99) if valid_speed.size else 1.0
+
+        cmap = plt.get_cmap("viridis").copy()
+        cmap.set_bad(color="black")
+
+        plt.figure(figsize=(12, 3))
+        plt.imshow(speed_plot.T, origin="lower", extent=[0, self.Lx, 0, self.Ly], cmap=cmap, aspect="auto", vmin=0.0, vmax=vmax)
+        plt.colorbar(label="|u|")
+        plt.title("LBM Velocity Magnitude (99th percentile clip)")
+        plt.xlabel("x")
+        plt.ylabel("y")
+        plt.tight_layout()
+        plt.savefig(output_path, dpi=180)
+
+        if show_plot:
+            plt.show()
+        else:
+            plt.close()
+
+        print(f"Saved velocity plot to {output_path}")
+
+
+    
+
+
+
+#examples
+sim_lbm = Navier_stokes_Lattice_Boltzmann_Simulation(Lx, Ly, 0.005, 0.02, 0.08)
+sim_lbm.run_simulation()
+sim_lbm.plot_velocity_field()
