@@ -1,6 +1,15 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import os
+
+ngs_path = r"G:\Other\programmeren\Scientific-Computation-team-17\.venv\Lib\site-packages\ngsolve"
+py_path = r"G:\Other\programmeren\Scientific-Computation-team-17\.venv\Scripts"
+
+if os.path.exists(ngs_path):
+    os.add_dll_directory(ngs_path)
+if os.path.exists(py_path):
+    os.add_dll_directory(py_path)
+    
 from tqdm import tqdm
 from timeit import default_timer as timer
 import numba
@@ -166,14 +175,10 @@ class Navier_stokes_Simulations_finite_difference:
         plt.ylabel('y')
         plt.show()
 
-
-
 # Example usage
 #sim = Navier_stokes_Simulations_finite_difference(Lx, Ly, nx=int(Lx * 100), ny=int(Ly * 100), dt=0.001, nu=0.005, F=0)
 #sim.run_simulation()
 #sim.plot_velocity_field()
-
-
 
 class Navier_stokes_Simulation_Fem_NGSOLVE:
     #here we simulate the navier stokes equations using the finite element method and ngsolve library
@@ -303,11 +308,6 @@ class Navier_stokes_Simulation_Fem_NGSOLVE:
 
         print(f"Saved velocity plot to {output_path}")
 
-    
-
-
-
-
 
 #tests
 #sim_fem = Navier_stokes_Simulation_Fem_NGSOLVE(Lx, Ly, 0.005, 0.02)
@@ -315,9 +315,6 @@ class Navier_stokes_Simulation_Fem_NGSOLVE:
 #sim_fem.setup_fem()
 #sim_fem.run_simulation()
 #sim_fem.plot_velocity_field()
-
-
-
 
 class Navier_stokes_Lattice_Boltzmann_Simulation:
     #here we simulate the navier stokes equations using the lattice boltzmann method
