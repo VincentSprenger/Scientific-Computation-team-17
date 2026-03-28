@@ -368,7 +368,7 @@ class Navier_stokes_Lattice_Boltzmann_Simulation:
             feq[:, :, i] = self.w[i] * rho * (1 + cu + 0.5 * cu**2 - 1.5 * (ux**2 + uy**2))
         return feq
     
-    def run_simulation(self, t_max=10):
+    def run_simulation(self, num_steps=10):
         rho = np.ones((self.nx, self.ny))
         u_x = np.full((self.nx, self.ny), self.v_speed)
         u_y = np.zeros((self.nx, self.ny))
@@ -377,7 +377,7 @@ class Navier_stokes_Lattice_Boltzmann_Simulation:
         u_y[self.obstacle_grid_bool] = 0
         f = self.equilibrium_eq(rho, u_x, u_y)
 
-        n_steps = int(t_max / self.tau)
+        n_steps = int(num_steps)
         for step in tqdm(range(n_steps)):
             # Macroscopic variables
             rho = np.sum(f, axis=2)
@@ -471,5 +471,5 @@ v_used = 0.12
 
 #examples
 sim_lbm = Navier_stokes_Lattice_Boltzmann_Simulation(Lx, Ly, 0.00005,  0.2, v_used, safety_overide=False, granularity=200)
-sim_lbm.run_simulation(t_max=t_max)
+sim_lbm.run_simulation(num_steps=t_max)
 sim_lbm.plot_velocity_field()
