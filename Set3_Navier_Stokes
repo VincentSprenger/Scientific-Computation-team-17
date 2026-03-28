@@ -11,8 +11,8 @@ from netgen.geom2d import SplineGeometry
 
 Lx = 2.2
 Ly = 0.41
-t_max = 100
-
+t_max = 1
+v_speed_test = 0.1
 
 class Navier_stokes_Simulations_finite_difference:
     def __init__(self, Lx, Ly, nx, ny, dt, nu, F):
@@ -127,13 +127,13 @@ class Navier_stokes_Simulations_finite_difference:
     def boundry_conditions(self, u, v, p):
         # inlet and outlet are periodic in x-direction
         #final nodes in x also have dp/dx = 0 and du/dx = 0, dv/dx = 0
-        u[-1, :] = u[-2, :]
+        u[-1, :] = v_speed_test#u[-2, :]
         v[-1, :] = v[-2, :]
         p[-1, :] = p[-2, :]
 
 
 
-        u[0, :] = u[-1, :]
+        u[0, :] = v_speed_test#u[-1, :]
         v[0, :] = v[-1, :]
         p[0, :] = p[-1, :]
         
@@ -169,9 +169,9 @@ class Navier_stokes_Simulations_finite_difference:
 
 
 # Example usage
-#sim = Navier_stokes_Simulations_finite_difference(Lx, Ly, nx=int(Lx * 100), ny=int(Ly * 100), dt=0.001, nu=0.01, F=10)
-#sim.run_simulation()
-#sim.plot_velocity_field()
+sim = Navier_stokes_Simulations_finite_difference(Lx, Ly, nx=int(Lx * 100), ny=int(Ly * 100), dt=0.001, nu=0.005, F=0)
+sim.run_simulation()
+sim.plot_velocity_field()
 
 
 
@@ -321,17 +321,19 @@ class Navier_stokes_Simulation_Fem_NGSOLVE:
 
 class Navier_stokes_Lattice_Boltzmann_Simulation:
     #here we simulate the navier stokes equations using the lattice boltzmann method
-    def __init__(self, Lx, Ly, nu, tau, v_speed, granularity=100):
+    def __init__(self, Lx, Ly, nu, tau, v_speed, safety_overide=False, granularity=100):
         self.Lx = Lx
         self.Ly = Ly
         self.nu = nu
         self.tau = tau
         self.v_speed = float(v_speed)
+        self.safety_overide = safety_overide
 
         # Keep LBM in a numerically stable regime.
         if self.v_speed >= 0.3:
-            print(f"Warning: v_speed={self.v_speed} is too high for LBM. Using 0.12.")
-            self.v_speed = 0.12
+            if self.safety_overide == False:
+                print(f"Warning: v_speed={self.v_speed} is too high for LBM. Using 0.12.")
+                self.v_speed = 0.12
         if self.tau <= 0.5:
             self.tau = 3.0 * self.nu + 0.5
             print(f"Warning: tau must be > 0.5 in BGK-LBM. Using tau={self.tau:.4f}.")
@@ -458,9 +460,16 @@ class Navier_stokes_Lattice_Boltzmann_Simulation:
 
     
 
+#t_max = 500
 
+# reynolds is Re = U * L / nu:
+
+#Re_wanted = 1
+
+#v_used = 0.12
+#nu = Ly * v_used / Re_wanted
 
 #examples
-sim_lbm = Navier_stokes_Lattice_Boltzmann_Simulation(Lx, Ly, 0.005, 0.02, 0.08)
-sim_lbm.run_simulation()
-sim_lbm.plot_velocity_field()
+#sim_lbm = Navier_stokes_Lattice_Boltzmann_Simulation(Lx, Ly, nu,  0.5, v_used, safety_overide=False, granularity=200)
+#sim_lbm.run_simulation(t_max=t_max)
+#sim_lbm.plot_velocity_field()
