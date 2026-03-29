@@ -2,9 +2,14 @@ import netgen.gui
 from ngsolve import *
 from netgen.occ import *
 
-# parameters
+# parameters: feel free to change these
 viscosity = 0.001
 inlet_velocity = 1
+tend = 5
+
+# largest we got away with is 0.001
+timestep = 0.001
+
 
 # Domain Geometry
 rect = Rectangle(2.2, 0.41).Face()
@@ -53,8 +58,6 @@ Draw(gfu.components[0], mesh, "velocity")
 print("press enter to start sim")
 input()
 
-# largest we got away with is 0.001
-timestep = 0.001
 
 m = BilinearForm(u * v * dx).Assemble()
 
@@ -67,7 +70,6 @@ conv = BilinearForm(X, nonassemble=True)
 conv += (Grad(u) * u) * v * dx
 
 t = 0
-tend = 5
 i = 0
 print("starting sim")
 print(f"parameters: \n viscosity={viscosity}, \n inlet_velocity={inlet_velocity}, \n timestep={timestep}")
