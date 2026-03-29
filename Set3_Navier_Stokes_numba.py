@@ -6,7 +6,7 @@ from numba import njit
 
 Lx = 2.2
 Ly = 0.41
-t_max = 2
+t_max = 20
 v_speed_test = 0.12
 
 
@@ -189,6 +189,11 @@ class Navier_stokes_Simulations_finite_difference_numba:
         plt.ylabel("y")
         plt.show()
 
+    def print_average_velocity(self):
+        avg_u = np.mean(self.u)
+        avg_v = np.mean(self.v)
+        print(f"Average velocity: u={avg_u:.4f}, v={avg_v:.4f}")
+
 
 if __name__ == "__main__":
     sim = Navier_stokes_Simulations_finite_difference_numba(
@@ -197,9 +202,10 @@ if __name__ == "__main__":
         nx=int(Lx * 100),
         ny=int(Ly * 100),
         dt=0.001,
-        nu=0.005,
+        nu=0.01,
         F=1,
         BC_speed = False
     )
     sim.run_simulation()
     sim.plot_velocity_field()
+    sim.print_average_velocity()

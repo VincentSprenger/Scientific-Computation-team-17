@@ -381,12 +381,30 @@ class Navier_stokes_Lattice_Boltzmann_Simulation:
             rho_safe = np.where(rho > 1e-12, rho, 1.0)
             u_x = np.sum(f * self.c[:, 0], axis=2) / rho_safe
             u_y = np.sum(f * self.c[:, 1], axis=2) / rho_safe
-            u_x[rho <= 1e-12] = 0.0
-            u_y[rho <= 1e-12] = 0.0
+            
+            # Zero velocity at obstacle
             u_x[self.obstacle_grid_bool] = 0
             u_y[self.obstacle_grid_bool] = 0
 
-            # Collision step
+            # Velocity limiting ONLY to prevent overflow (very loose bounds)
+            u_mag = np.sqrt(u_x**2 + u_y**2)
+            if np.max(u_mag) > 1.0:  # Only limit if velocities exceed 1.0  (very high)
+                u_scale = 0.5 / np.max(u_mag)
+                u_x *= u_scale
+                u_y *= u_scale
+            
+            # Check for NaN/Inf
+            if np.any(~np.isfinite(f)):
+                print(f"INSTABILITY DETECTED at step {step}")
+                break
+
+            # Diagnostics
+            if step % 500 == 0:
+                rho_mean = np.mean(rho[~self.obstacle_grid_bool])
+                u_max = np.max(np.sqrt(u_x**2 + u_y**2)[~self.obstacle_grid_bool])
+                print(f"  Step {step}: rho_mean={rho_mean:.4f}, u_max={u_max:.4f}")
+
+            # Standard BGK Collison
             feq = self.equilibrium_eq(rho, u_x, u_y)
             f_out = f - (f - feq) / self.tau
 
@@ -399,22 +417,48 @@ class Navier_stokes_Lattice_Boltzmann_Simulation:
                 f[:, :, i] = np.roll(f_out[:, :, i], shift=self.c[i, 0], axis=0)
                 f[:, :, i] = np.roll(f[:, :, i], shift=self.c[i, 1], axis=1)
 
-            # Outlet: simple zero-gradient
-            f[-1, :, :] = f[-2, :, :]
+            # Outlet: Neumann (zero-gradient extrapolation) - better than copy
+            #  Extrapolate from last two columns to allow smooth outflow
+            f[-1, :, :] = 2.0 * f[-2, :, :] - f[-3, :, :]
 
-            # Inlet: Zou-He with prescribed streamwise speed
-            rho_in = (
-                (f[0, :, 0] + f[0, :, 2] + f[0, :, 4])
-                + 2.0 * (f[0, :, 3] + f[0, :, 6] + f[0, :, 7])
-            ) / (1.0 - self.v_speed)
+            # Inlet: Standard Zou-He with density reconstruction
+            #  Only use known populations (from left/west) to compute inlet density
+            rho_in = (f[0, :, 0] + f[0, :, 2] + f[0, :, 4] +
+                      2.0 * (f[0, :, 3] + f[0, :, 6] + f[0, :, 7])) / (1.0 - self.v_speed)
+            
+            # Minimal clamping on inlet to avoid suppressing inlet BC
+            rho_in = np.clip(rho_in, 0.7, 1.3)
+            
+            # Reconstruct unknown inlet populations with clamped density
             f[0, :, 1] = f[0, :, 3] + (2.0 / 3.0) * rho_in * self.v_speed
-            f[0, :, 5] = f[0, :, 7] - 0.5 * (f[0, :, 2] - f[0, :, 4]) + (1.0 / 6.0) * rho_in * self.v_speed
-            f[0, :, 8] = f[0, :, 6] + 0.5 * (f[0, :, 2] - f[0, :, 4]) + (1.0 / 6.0) * rho_in * self.v_speed
+            f[0, :, 5] = (f[0, :, 7] - 0.5 * (f[0, :, 2] - f[0, :, 4]) + 
+                          (1.0 / 6.0) * rho_in * self.v_speed)
+            f[0, :, 8] = (f[0, :, 6] + 0.5 * (f[0, :, 2] - f[0, :, 4]) + 
+                          (1.0 / 6.0) * rho_in * self.v_speed)
 
         self.rho = rho
         self.u_x = u_x
         self.u_y = u_y
         self.f = f
+        
+        # Diagnostics: print sample values from different regions
+        print(f"\nFinal state diagnostics:")
+        print(f"  Density: min={np.min(rho):.4f}, max={np.max(rho):.4f}, mean={np.mean(rho):.4f}")
+        print(f"  Velocity u_x: min={np.min(u_x):.4f}, max={np.max(u_x):.4f}, mean={np.mean(u_x):.4f}")
+        print(f"  Velocity u_y: min={np.min(u_y):.4f}, max={np.max(u_y):.4f}, mean={np.mean(u_y):.4f}")
+        
+        # Check velocity in different regions
+        inlet_region = u_x[0:10, :]
+        outlet_region = u_x[-10:, :]
+        center_region = u_x[self.nx//2-10:self.nx//2+10, self.ny//2-5:self.ny//2+5]
+        
+        print(f"  Inlet (x=0-10): u_x = {np.mean(inlet_region):.4f}")
+        print(f"  Outlet (x=-10): u_x = {np.mean(outlet_region):.4f}")
+        print(f"  Center: u_x = {np.mean(center_region):.4f}")
+        
+        # Check if cylinder is actually affecting flow
+        obstacle_u = u_x[self.obstacle_grid_bool]
+        print(f"  Velocity at obstacle: min={np.min(obstacle_u):.6f}, max={np.max(obstacle_u):.6f}")
 
     def plot_velocity_field(self, output_path="sim_results/lbm_velocity_set3.png", show_plot=True):
         x = np.linspace(0, self.Lx, self.nx)
@@ -457,16 +501,16 @@ class Navier_stokes_Lattice_Boltzmann_Simulation:
 
     
 
-t_max = 30
+t_max = 1000
 
 # reynolds is Re = U * L / nu:
 
 #Re_wanted = 1
 
-v_used = 0.12
+v_used = 0.05  # REDUCED from 0.12 for stability
 #nu = Ly * v_used / Re_wanted
 
 #examples
-sim_lbm = Navier_stokes_Lattice_Boltzmann_Simulation(Lx, Ly, 0.00005,  0.2, v_used, safety_overide=False, granularity=200)
+sim_lbm = Navier_stokes_Lattice_Boltzmann_Simulation(Lx, Ly, 0.02,  0.2, v_used, safety_overide=False, granularity=100)
 sim_lbm.run_simulation(num_steps=t_max)
 sim_lbm.plot_velocity_field()
