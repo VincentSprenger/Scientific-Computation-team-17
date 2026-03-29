@@ -2,6 +2,10 @@ import netgen.gui
 from ngsolve import *
 from netgen.occ import *
 
+# parameters
+viscosity = 0.001
+inlet_velocity = 1
+
 # Domain Geometry
 rect = Rectangle(2.2, 0.41).Face()
 rect.edges.name = "wall"
@@ -24,21 +28,19 @@ X = V * Q
 u, p = X.TrialFunction()
 v, q = X.TestFunction()
 
-# viscosity
-nu = 0.001  
-
-stokes = (nu*InnerProduct(grad(u), grad(v)) + div(u) * q + div(v) * p - 1e-10 * p * q) * dx
+#  combine the weak forms of the momentum and continuity equations
+stokes = (viscosity*InnerProduct(grad(u), grad(v)) + div(u) * q + div(v) * p - 1e-10 * p * q) * dx
 
 a = BilinearForm(stokes).Assemble()
 f = LinearForm(X).Assemble()
 
 gfu = GridFunction(X)
 
-uin = CoefficientFunction((1, 0))
+# boundary conditions
+uin = CoefficientFunction((inlet_velocity, 0))
 gfu.components[0].Set(uin, definedon=mesh.Boundaries("inlet"))
 gfu.components[1].Set(CoefficientFunction(0), definedon=mesh.Boundaries("outlet"))
 
-# Boundaries
 gfu_bnd = GridFunction(X)
 gfu_bnd.components[0].Set(uin, definedon=mesh.Boundaries("inlet"))
 gfu_bnd.components[1].Set(CoefficientFunction(0), definedon=mesh.Boundaries("outlet"))
@@ -51,6 +53,7 @@ Draw(gfu.components[0], mesh, "velocity")
 print("press enter to start sim")
 input()
 
+# largest we got away with is 0.001
 timestep = 0.001
 
 m = BilinearForm(u * v * dx).Assemble()
@@ -67,6 +70,7 @@ t = 0
 tend = 5
 i = 0
 print("starting sim")
+print(f"parameters: \n viscosity={viscosity}, \n inlet_velocity={inlet_velocity}, \n timestep={timestep}")
 with TaskManager():
     while t < tend:
         gfu_prev = gfu.vec.CreateVector()
@@ -128,35 +132,40 @@ for iy in range(ny):
             # Point outside of curved mesh or not evaluable in current element
             pass
 
+# print reynolds number
+average_velocity = np.nanmean(np.sqrt(Ux**2 + Uy**2))
+reynolds_number = (average_velocity * 2.2) / viscosity
+print(f"Reynolds number: {reynolds_number:.2f}")
+
 # Create figure with subplots
-fig, axes = plt.subplots(2, 1, figsize=(5, 15))
+fig, axes = plt.subplots(1, 1, figsize=(10, 4))
 
 # Velocity magnitude
 u_mag = np.sqrt(Ux**2 + Uy**2)
-pcm = axes[0].pcolormesh(Xg, Yg, u_mag, shading='auto', cmap='viridis')
-axes[0].set_xlabel('X')
-axes[0].set_ylabel('Y')
-axes[0].set_title('Final Velocity Magnitude')
-axes[0].set_aspect('equal')
-plt.colorbar(pcm, ax=axes[0], label='|u|')
+pcm = axes.pcolormesh(Xg, Yg, u_mag, shading='auto', cmap='viridis')
+axes.set_xlabel('X')
+axes.set_ylabel('Y')
+axes.set_title('Final Velocity Magnitude')
+axes.set_aspect('equal')
+plt.colorbar(pcm, ax=axes, label='|v|')
 
-# Vectors
-step = 4
-Xq = Xg[::step, ::step]
-Yq = Yg[::step, ::step]
-Uq = Ux[::step, ::step]
-Vq = Uy[::step, ::step]
-Mq = np.isfinite(Uq) & np.isfinite(Vq)
+# # Vectors
+# step = 4
+# Xq = Xg[::step, ::step]
+# Yq = Yg[::step, ::step]
+# Uq = Ux[::step, ::step]
+# Vq = Uy[::step, ::step]
+# Mq = np.isfinite(Uq) & np.isfinite(Vq)
 
-axes[1].quiver(
-    Xq[Mq], Yq[Mq], Uq[Mq], Vq[Mq],
-    np.sqrt(Uq[Mq]**2 + Vq[Mq]**2),
-    cmap='plasma'
-)
-axes[1].set_xlabel('X')
-axes[1].set_ylabel('Y')
-axes[1].set_title('Final Velocity Field')
-axes[1].set_aspect('equal')
+# axes[1].quiver(
+#     Xq[Mq], Yq[Mq], Uq[Mq], Vq[Mq],
+#     np.sqrt(Uq[Mq]**2 + Vq[Mq]**2),
+#     cmap='plasma'
+# )
+# axes[1].set_xlabel('X')
+# axes[1].set_ylabel('Y')
+# axes[1].set_title('Final Velocity Field')
+# axes[1].set_aspect('equal')
 
 plt.tight_layout()
 plt.show()
