@@ -67,3 +67,27 @@ Example usage is shown at the bottom of the file. Simply run Set2_RD_system.py.
 </details>
 
 
+# Assignment 3
+
+## WiFi optimization
+
+Requirements: numpy, scipy, matplotlib  
+Run directly with: python set3-wifi.py  
+
+finds the optimal WiFi router position in a 2D floor plan by solving the Helmholtz equation. The floor plan is discretized onto a uniform grid, with the 2 materials - air and wall- having a different refractive index. A brute forced sampling approach is used to find the optimal router position
+Program outputs 2 pngs, one of the wave propagation pattern and one of the layout of the house.  
+
+All parameters are located at the top of the file under `#Config` and can be changed:
+
+- `dx` — grid spacing in meters, lower is more accurate but slower
+- `k_scale` — wavenumber scaling factor
+- `frequency` — WiFi frequency in Hz
+- `wt` — wall thickness in meters
+- `n_air` — refractive index of air
+- `n_wall` — refractive index of walls
+- `A_amp` — Gaussian source amplitude
+- `sigma` — Gaussian source width in meters
+- `excl_area` — exclusion radius around measurement points in meters
+- `measure_rad` — averaging radius for signal measurement in meters
+- `chunk_size` — batch size for solving, higher is faster but uses more RAM
+
